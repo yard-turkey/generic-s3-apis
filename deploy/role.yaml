@@ -39,10 +39,9 @@ rules:
   - get
   - create
 - apiGroups:
-  - bucket.apis.io
+  - store-operator.s3
   resources:
   - '*'
   - objectbucketclaims
-  - objectbuckets
   verbs:
   - '*'

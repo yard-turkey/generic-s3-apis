@@ -1,4 +1,4 @@
-apiVersion: bucket.apis.io/v1alpha1
+apiVersion: store-operator.s3/v1alpha1
 kind: ObjectBucket
 metadata:
   name: example-objectbucket
