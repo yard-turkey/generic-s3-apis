@@ -1,11 +1,11 @@
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: generic-s3-apis
+  name: generic-s3-bucket-apis
 subjects:
 - kind: ServiceAccount
-  name: generic-s3-apis
+  name: generic-s3-bucket-apis
 roleRef:
   kind: Role
-  name: generic-s3-apis
+  name: generic-s3-bucket-apis
   apiGroup: rbac.authorization.k8s.io

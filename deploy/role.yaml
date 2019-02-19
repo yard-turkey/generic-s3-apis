@@ -2,7 +2,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   creationTimestamp: null
-  name: generic-s3-apis
+  name: generic-s3-bucket-apis
 rules:
 - apiGroups:
   - ""

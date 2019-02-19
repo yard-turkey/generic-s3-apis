@@ -1,27 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: generic-s3-apis
+  name: generic-s3-bucket-apis
 spec:
   replicas: 1
   selector:
     matchLabels:
-      name: generic-s3-apis
+      name: generic-s3-bucket-apis
   template:
     metadata:
       labels:
-        name: generic-s3-apis
+        name: generic-s3-bucket-apis
     spec:
-      serviceAccountName: generic-s3-apis
+      serviceAccountName: generic-s3-bucket-apis
       containers:
-        - name: generic-s3-apis
+        - name: generic-s3-bucket-apis
           # Replace this with the built image name
           image: REPLACE_IMAGE
           ports:
           - containerPort: 60000
             name: metrics
           command:
-          - generic-s3-apis
+          - generic-s3-bucket-apis
           imagePullPolicy: Always
           env:
             - name: WATCH_NAMESPACE
@@ -33,4 +33,4 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
-              value: "generic-s3-apis"
+              value: "generic-s3-bucket-apis"
