@@ -1,7 +1,7 @@
 package apis
 
 import (
-	"github.com/yard-turkey/generic-s3-bucket-apis/pkg/apis/store-operator/v1alpha1"
+	"github.com/yard-turkey/generic-s3-bucket-apis/pkg/apis/storeoperator.io/v1alpha1"
 )
 
 func init() {

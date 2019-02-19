@@ -10,8 +10,8 @@ import (
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/operator-framework/operator-sdk/pkg/leader"
 	sdkVersion "github.com/operator-framework/operator-sdk/version"
-	"github.com/yard-turkey/generic-s3-apis/pkg/apis"
-	"github.com/yard-turkey/generic-s3-apis/pkg/controller"
+	"github.com/yard-turkey/generic-s3-bucket-apis/pkg/apis"
+	"github.com/yard-turkey/generic-s3-bucket-apis/pkg/controller"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -52,7 +52,7 @@ func main() {
 	}
 
 	// Become the leader before proceeding
-	err = leader.Become(context.TODO(), "generic-s3-apis-lock")
+	err = leader.Become(context.TODO(), "generic-s3-bucket-apis-lock")
 	if err != nil {
 		log.Error(err, "")
 		os.Exit(1)
