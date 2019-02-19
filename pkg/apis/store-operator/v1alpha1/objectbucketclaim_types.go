@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -9,14 +10,24 @@ import (
 
 // ObjectBucketClaimSpec defines the desired state of ObjectBucketClaim
 type ObjectBucketClaimSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
+	StorageClass string
 }
+
+type ObjectBucketClaimStatusPhase string
+
+const (
+	ObjectBucketClaimStatusPhasePending = "pending"
+	ObjectBucketClaimStatusPhaseBound   = "bound"
+	ObjectBucketClaimStatusPhaseError   = "error" //TODO do we need this?
+	ObjectBucketClaimStatusPhaseLost    = "lost"
+)
 
 // ObjectBucketClaimStatus defines the observed state of ObjectBucketClaim
 type ObjectBucketClaimStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
+	Phase           ObjectBucketClaimStatusPhase
+	ObjectBucketRef *v1.ObjectReference
+	ConfigMapRef    *v1.ObjectReference
+	SecretRef       *v1.SecretReference
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
