@@ -5,7 +5,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type ObjectBucketSource struct {
+type ObjectBucketSource struct{}
+
+// ObjectBucketSpec defines the desired state of ObjectBucket.
+// Fields defined here should be normal among all S3 providers.
+type ObjectBucketSpec struct {
+	// BucketName the base name of the bucket
+	BucketName string `json:"bucketName"`
 	// Host the host URL of the object store with
 	Host string `json:"host"`
 	// Region the region of the bucket within an object store
@@ -16,27 +22,17 @@ type ObjectBucketSource struct {
 	SecurePort int `json:"securePort"`
 	// SSL true if the connection is secured with SSL, false if it is not.
 	SSL bool `json:"ssl"`
-	// SupportsTenants true if the object store provider supports the use of Tenants
-	Tenant string `json:"tenant,omitempty"`
-	// SuppotsNamespace true if the object store provider supports Namespaces
-	Namespace string `json:"namespace,omitempty"`
+
 	// Versioned true if the object store support versioned buckets, false if not
 	Versioned bool `json:"versioned,omitempty"`
-}
-
-// ObjectBucketSpec defines the desired state of ObjectBucket
-type ObjectBucketSpec struct {
-	BucketName         string
-	ObjectBucketSource *ObjectBucketSource
 }
 
 type ObjectBucketStatusPhase string
 
 const (
 	ObjectBucketStatusPhasePending ObjectBucketStatusPhase = "pending"
-	ObjectBucketStatusPhaseBound ObjectBucketStatusPhase = "bound"
-	ObjectBucketStatusPhaseLost ObjectBucketStatusPhase = "lost"
-	ObjectBucketStatusPhaseError ObjectBucketStatusPhase = "error" // TODO do we need this?
+	ObjectBucketStatusPhaseBound   ObjectBucketStatusPhase = "bound"
+	ObjectBucketStatusPhaseLost    ObjectBucketStatusPhase = "lost"
 )
 
 // ObjectBucketStatus defines the observed state of ObjectBucket

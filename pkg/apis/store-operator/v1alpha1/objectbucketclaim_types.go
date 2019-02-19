@@ -18,7 +18,6 @@ type ObjectBucketClaimStatusPhase string
 const (
 	ObjectBucketClaimStatusPhasePending = "pending"
 	ObjectBucketClaimStatusPhaseBound   = "bound"
-	ObjectBucketClaimStatusPhaseError   = "error" //TODO do we need this?
 	ObjectBucketClaimStatusPhaseLost    = "lost"
 )
 
