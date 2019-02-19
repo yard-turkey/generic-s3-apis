@@ -1,9 +1,9 @@
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
-  name: objectbucketclaims.store-operator.s3
+  name: objectbucketclaims.storeoperator.io
 spec:
-  group: store-operator.s3
+  group: storeoperator.io
   names:
     kind: ObjectBucketClaim
     listKind: ObjectBucketClaimList
