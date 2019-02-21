@@ -274,7 +274,7 @@ parameters:
 1. `objectStoreNamespace` the namespace of the object store
 1. `region` (optional) defines a region of the object store
 
-### Bucket Methods and Structs
+## Bucket Methods and Structs
 
 ```golang
 // Provisioner the interface to be implemented by users of this
