@@ -58,19 +58,22 @@ which represents this bucket. The OB's status will indicate that the related OBC
 has been deleted so that an admin has better visibility into buckets that are missing
 their connection information.
 
-**Note:** it is an expected enhancement to support the Storage Class' _reclaimPolicy_.,
+**Note:** it is an expected enhancement to support the Storage Class' _reclaimPolicy_,
 but for this POC phase, the safest approach is to ignore this policy and not delete
 the bucket.
 
 ### Binding
 
 Bucket binding requires these steps before the bucket is accessible to an app pod:
-1. the creation of the physical bucket with the correct owner access key-pairs,
+1. the creation of the physical bucket with the correct owner access key-pairs. This 
+is done by each object store provisioner,
 1. the creation of user access key-pairs, in the form of a Secret, granting the app
-pod full access to this bucket (but not the ability to create new buckets),
-1. the creation of a ConfigMap which defines the endpoint of this bucket,
+pod full access to this bucket (but not the ability to create new buckets). This is
+done by the bucket library,
+1. the creation of a ConfigMap which defines the endpoint of this bucket. Also done
+by the bucket lib,
 1. the creation of an OB watch/reconciler so that the actual-state-of-the-world is
-refected in the OB.
+refected in the OB. Done by the bucket lib.
 
 `Bound` is one of the supported phases of an OB and OBC. `Bound` indicates that a
 bucket and all related artifacts have been created on behalf of the OBC.
@@ -87,46 +90,6 @@ of buckets can be controlled by a resource quota once
 [this k8s pr](https://github.com/kubernetes/kubernetes/pull/72384) is merged. Until then, 
 Resource Quotas cannot yet be defined for CRDs and, thus, there is no quota on the 
 number of buckets.
-
-### Forward Looking
-
-The OB/OBC APIs are enough to support bucket provisioning in Rook-Ceph. However, if
-we are going to propose this to the k8s community, there has to be some form of life
-cycle manager library for OBCs/OBs. Otherwise we have no way of enforcing the 
-behavior/contract described in this proposal. The _binding_ concept would have to be
-re-implemented by each provisioner and be fully consistent in order to hide object
-store details from the app pod. This also applies to the ConfigMap and Secret being
-generated in users’ namespaces with the expected properties, and being deleted 
-consistently.
-
-It’s clear that if we want this concept to gain broader k8s acceptance, we need to
-present an accompanying lifecycle controller library, similar to the
-[sig-storage-lib-external-provisioner](https://github.com/kubernetes-sigs/sig-storage-lib-external-provisioner).
-Not doing so, and expecting each controller to adhere to the documentation instead, 
-likely means the APIs won’t see use outside of the few controllers we write ourselves.
-
-This controller library should define a `Provision()` and `Delete()` interface. The 
-`Provision()` method should return an ObjectBucket, and Credential (defined below), 
-while the library consistently generates the Secret and ConfigMap. The approach would
-leverage [dynamic informers](https://github.com/kubernetes/kubernetes/pull/69308)
-
-By defining the interfaces and controller framework around these APIs, we establish
-a contract between consumers of the APIs and the provisioners who implement them. If 
-we do not have the time or resources to follow through on developing this library, 
-the value of the APIs is limited almost exclusively to Rook-Ceph. Even in that case,
-it would be better to define Rook-Ceph specific APIs in the Rook repo rather
-than aiming for a generic solution and temporarily hosting in yard-turkey.
-
-#### When
-
-If we decide that this is the right direction, it seems reasonable that we start
-work following the delivery of an initial Rook-Ceph bucket provisioner. This means
-that the rook-ceph POC will require a significant rewrite later, but could be
-structured to fit an expected interface. This project is not one that can be worked
-on in parallel with the rook-ceph implementation as it would be a direct dependency 
-of it. Due to time considerations and priorities to support rook-ceph, it cannot be
-done before the rook-ceph POC as it would push that timeline too far out in our
-opinions.
 
 ## API Specifications
 
@@ -310,3 +273,97 @@ parameters:
 1. `objectStore` used by the operator to derive the object store Service name.
 1. `objectStoreNamespace` the namespace of the object store
 1. `region` (optional) defines a region of the object store
+
+### Bucket Methods and Structs
+
+```golang
+// Provisioner the interface to be implemented by users of this
+// library and executed by the Reconciler
+type Provisioner interface {
+	// Provision should be implemented to handle bucket creation
+	// for the target object store
+	Provision(*v1alpha1.ObjectBucketClaim) (*v1alpha1.ObjectBucketClaim, *S3AccessKeys, error)
+	// Delete should be implemented to handle bucket deletion
+	// for the target object store
+	Delete(claim *v1alpha1.ObjectBucketClaim) error
+}
+```
+
+```golang
+// ObjectBucket is the Schema for the objectbuckets API
+// +k8s:openapi-gen=true
+type ObjectBucket struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   ObjectBucketSpec   `json:"spec,omitempty"`
+	Status ObjectBucketStatus `json:"status,omitempty"`
+}
+```
+
+```golang
+// ObjectBucketSpec defines the desired state of ObjectBucket.
+// Fields defined here should be normal among all S3 providers.
+type ObjectBucketSpec struct {
+	// BucketName the base name of the bucket
+	BucketName string `json:"bucketName"`
+	// Host the host URL of the object store with
+	Host string `json:"host"`
+	// Region the region of the bucket within an object store
+	Region string `json:"region"`
+	// Port the insecure port number of the object store, if it exists
+	Port int `json:"port"`
+	// SecurePort the secure port number of the object store, if it exists
+	SecurePort int `json:"securePort"`
+	// SSL true if the connection is secured with SSL, false if it is not.
+	SSL bool `json:"ssl"`
+
+	// Versioned true if the object store support versioned buckets, false if not
+	Versioned bool `json:"versioned,omitempty"`
+}
+```
+
+```golang
+// ObjectBucketStatus defines the observed state of ObjectBucket
+type ObjectBucketStatus struct {
+	Controller *v1.ObjectReference
+}
+```
+
+```golang
+// ObjectBucketClaim is the Schema for the objectbucketclaims API
+// +k8s:openapi-gen=true
+type ObjectBucketClaim struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   ObjectBucketClaimSpec   `json:"spec,omitempty"`
+	Status ObjectBucketClaimStatus `json:"status,omitempty"`
+}
+```
+```golang
+// ObjectBucketClaimSpec defines the desired state of ObjectBucketClaim
+type ObjectBucketClaimSpec struct {
+	StorageClass string
+}
+```
+
+```golang
+// ObjectBucketClaimStatus defines the observed state of ObjectBucketClaim
+type ObjectBucketClaimStatus struct {
+	Phase           ObjectBucketClaimStatusPhase
+	ObjectBucketRef *v1.ObjectReference
+	ConfigMapRef    *v1.ObjectReference
+	SecretRef       *v1.SecretReference
+}
+```
+
+```golang
+type ObjectBucketClaimStatusPhase string
+
+const (
+	ObjectBucketClaimStatusPhasePending = "pending"
+	ObjectBucketClaimStatusPhaseBound   = "bound"
+	ObjectBucketClaimStatusPhaseLost    = "lost"
+)
+```
