@@ -2,90 +2,91 @@
 
 Kubernetes natively supports dynamic provisioning for many types of file and
 block storage, but lacks support for object bucket provisioning. 
-This repo is a temporary placeholder for bucket provisioning CRDs and related
-generated client code. The longer term goal is to move this repo to a Kubernetes
-repo such as sig-storage or an external storage repo.
+This repo is a temporary placeholder for an object store bucket provisioning library,
+very similar to the Kubernetes 
+[sig-storage-lib-external-provisioner](https://github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/blob/master/controller/controller.go)
+library. The goal is to eventually move this repo to a Kubernetes repo within _sig-storage/_.
 
-### Design Overview
-S3 compatible object store buckets are stable and consistent among most, if not
-all, object store solutions. Therefore, the time has come where we can
-support a bucket provisioning API similar to that used for Persistent Volumes.
-We propose two new Custom Resources to abstract an object store bucket and
-a claim/request for such a bucket.  It's important to keep in mind, this
-proposal initially only defined bucket and bucket claim APIs and related
-client code. See the _*Forward Looking*_ section for more info on how we propose
-to augment this initial design with a full bucket library so that all bucket
-provisioners can easily guarantee the bucket endpoint and credentials _contract_
-described below.
+### Design
+The time has come where we can support a bucket provisioning API similar to that used for
+Persistent Volumes. We propose two new Custom Resources to abstract an object store bucket
+and a claim/request for such a bucket.  It's important to keep in mind that this proposal 
+only defines bucket and bucket claim APIs and related library code. The lib ensures that 
+the _contract_ made to app developers regarding the artifacts of bucket creation (Secrets,
+ConfigMaps) are guaranteed. The actual creation of buckets belongs to each object store
+provisioner. However, as is true for dynamic Persistent Volume provisioning, each bucket
+provisioner needs to adhere to the inferfaces defined in the bucket library.
 
 An `ObjectBucketClaim` (OBC) is similar in usage to a Persistent Volume Claim
 and an `ObjectBucket` (OB) is the Persistent Volume equivalent. 
 Bucket binding refers to the actual bucket being created by the underlying object
-store provider. An OBC is namespaced and references a storage class which defines
-the object store itself. The details of the object store (ceph, minio, cloud,
-on-prem) are not apparent to the developer and can change without disturbing the app.
-An OB is non-namespaced (global), typically not visible to end users, and will
-contain some info pertinent to the provisioned bucket. Like PVs, there is a 1:1
-binding of an OBC to a OB.
+store provide, and the generated artifacts consumed by application pods. An OBC is
+namespaced and references a storage class which defines the object store. The details
+of the object store (ceph, minio, cloud, on-prem) are not visible to the app pod and
+can change without disturbing the app in anyway. An OB is non-namespaced (global),
+typically not visible to end users, and will contain info pertinent to the provisioned
+bucket. Like PVs, there is a 1:1 binding of an OBC to an OB.
 
-Even though OBCs and OBs are generic, the actual bucket provisioning is done by
-object store specific operators. For example, if the underlying object store is
-AWS S3, the developer creates an OBC, referencing a Storage Class which references
-the S3 store. The cluster has the S3 provisioner running which is watching for
-OBCs that it knows how to handle. Other OBCs are ignored by the S3 provisioner.
-Likewise, the same cluster can also have a rook-ceph RGW provisioner running which also watches OBCs. Like the S3 proivisioner, it only handles OBCs that it knows
-how to provision and skips the rest.
+As is true for dynamic PV provisioning, a bucket provisioner needs to be running
+for each object store represented by the Kubernetes cluster. For example, if the
+underlying object store is AWS S3, the developer will create an OBC, referencing
+a Storage Class which references the S3 store. The cluster has the S3 provisioner
+running which is watching for OBCs that it knows how to handle. Other OBCs are ignored
+by the S3 provisioner. Additionally, the same cluster can have a rook-ceph RGW
+provisioner running which also watches OBCs. Like the S3 proivisioner, it only handles
+OBCs that it knows how to provision and skips the rest. In this proposal, the bucket
+provisioners will be simple-to-write operators because the bucket provisioning lib
+handles the bulk of the work. Each provisioner is only responsible for writing
+`Provision()` and `Delete()`functions (the _business logic_) and a short `main()`
+function.
 
-In order to access the bucket, the endpoint and key-pair access keys need to be
-availble to an application pod, and the pod should not run until the bucket has
-been provisioned and can be accessed. This is true even if the pod is created
-prior to the OBC.
-To synchronize pods with buckets, a ConfigMap will contain the bucket endpoint
-and a Secret will contain the key-pair credentials. Pods already block for secrets
-and config maps to be mounted, so we have a simple, familiar synchronization pattern.
+The `Provision()` and `Delete()`functions are interfaces defined in the bucket library.
+All bucket provisioners are required to return an OB struct and the bucket
+credentials (access-key, endpoint) as defined in the bucket lib. Based on the returned
+OB, the lib will create the bucket artifacts: user Secret, user ConfigMap, and OB
+controller (primarily for status updates). The Secret and ConfigMap have deterministic
+names, namespaces, and property keys. An app pod consuming a bucket need only be aware
+of the Secret name and keys, and the ConfigMap name and fields. The app pod will not
+run until the bucket has been provisioned and can be accessed. This is true even if
+the pod is created prior to the OBC.
 
-An OBC can be deleted but the underlying bucket is not removed due to concerns
-of deleting objects that cannot be easily recovered. However, OBC deletion triggers
-cleanup of Kubernetes resources created on behalf of the bucket, including the secret and config map.
-Since the physical bucket is not deleted neither is the OB, which
-represents this bucket. The OB's status will indicate that the related OBC
-has been deleted so that an admin has better visibility into buckets that are
-missing their connection information.
+An OBC can be deleted but the underlying bucket is not removed, in this POC phase, due
+to concerns of deleting objects that cannot be easily recovered. However, OBC deletion
+triggers cleanup of Kubernetes resources created on behalf of the bucket, including
+the Secret and ConfigMap. Since the physical bucket is not deleted neither is the OB,
+which represents this bucket. The OB's status will indicate that the related OBC
+has been deleted so that an admin has better visibility into buckets that are missing
+their connection information.
 
-### Details
+**Note:** it is an expected enhancement to support the Storage Class' _reclaimPolicy_.,
+but for this POC phase, the safest approach is to ignore this policy and not delete
+the bucket.
 
-Bucket binding requires three steps before the bucket is accessible to an app pod:
+### Binding
+
+Bucket binding requires these steps before the bucket is accessible to an app pod:
 1. the creation of the physical bucket with the correct owner access key-pairs,
 1. the creation of user access key-pairs, in the form of a Secret, granting the app
 pod full access to this bucket (but not the ability to create new buckets),
-1. the creation of a config map which defines the endpoint of this bucket.
+1. the creation of a ConfigMap which defines the endpoint of this bucket,
+1. the creation of an OB watch/reconciler so that the actual-state-of-the-world is
+refected in the OB.
 
-The app pod consumes the config map (endpoint) and secret (key-pairs). The app pod
-never sees the OBC or the generated OB.
-Note: the provisioner is considered the owner of the bucket, not the OBC or app pod.
-This is done to prevent an OBC author from using her access key to create buckets
-outside of the Kubernetes cluster. The OBC creator has object PUT, GET, and DELETE
-access to the bucket, but cannot create buckets with this access key.
+`Bound` is one of the supported phases of an OB and OBC. `Bound` indicates that a
+bucket and all related artifacts have been created on behalf of the OBC.
 
-### Controllers
-
-Each object store bucket provisioner is expected to write two separate
-reconcillation controllers to support this design. 
-For example, if the cluster supports AWS S3 and Rook-Ceph RGW objects stores
-then there will be two OBC controllers (one for S3 and one for rook-ceph), and two OB controllers.
-
-1. OBCs in all namespaces are watched and an OB is created when the OBC's Storage
-Class' provisioner is recognized by this controller. After the OB operator creates
-the bucket, the OBC operator creates the user access Secret and endpoint Config Map.
-1.  OBs are watched and a new OB triggers creation of the actual bucket. The 
-bucket owner is the object store which has full access.
+**Note:** the provisioner is the owner of the bucket, not the OBC. This is done to
+prevent an OBC author from using the generated access key to create buckets outside
+of Kubernetes. The OBC creator has object PUT, GET, and DELETE access to the bucket,
+but cannot create buckets with this access key.
 
 ### Quota
 
 S3 bucket size cannot be specified; however, bucket size can be monitored in S3. The number
 of buckets can be controlled by a resource quota once
-[k8s pr](https://github.com/kubernetes/kubernetes/pull/72384) is merged. Until then, 
-Resource Quotas cannot yet be defined for CRDs.
+[this k8s pr](https://github.com/kubernetes/kubernetes/pull/72384) is merged. Until then, 
+Resource Quotas cannot yet be defined for CRDs and, thus, there is no quota on the 
+number of buckets.
 
 ### Forward Looking
 
@@ -105,7 +106,7 @@ Not doing so, and expecting each controller to adhere to the documentation inste
 likely means the APIs won’t see use outside of the few controllers we write ourselves.
 
 This controller library should define a `Provision()` and `Delete()` interface. The 
-`Provision()` method should return an *ObjectBucket, and Credential (defined below), 
+`Provision()` method should return an ObjectBucket, and Credential (defined below), 
 while the library consistently generates the Secret and ConfigMap. The approach would
 leverage [dynamic informers](https://github.com/kubernetes/kubernetes/pull/69308)
 
