@@ -20,15 +20,15 @@ provisioner needs to adhere to the inferfaces defined in the bucket library.
 An `ObjectBucketClaim` (OBC) is similar in usage to a Persistent Volume Claim
 and an `ObjectBucket` (OB) is the Persistent Volume equivalent. 
 Bucket binding refers to the actual bucket being created by the underlying object
-store provide, and the generated artifacts consumed by application pods. An OBC is
-namespaced and references a storage class which defines the object store. The details
-of the object store (ceph, minio, cloud, on-prem) are not visible to the app pod and
-can change without disturbing the app in anyway. An OB is non-namespaced (global),
+store provide, and the generation of artifacts which will be consumed by application pods.
+An OBC is namespaced and references a storage class which defines the object store. The
+details of the object store (ceph, minio, cloud, on-prem) are not visible to the app pod
+and can change without disturbing the app in anyway. An OB is non-namespaced (global),
 typically not visible to end users, and will contain info pertinent to the provisioned
 bucket. Like PVs, there is a 1:1 binding of an OBC to an OB.
 
 As is true for dynamic PV provisioning, a bucket provisioner needs to be running
-for each object store represented by the Kubernetes cluster. For example, if the
+for each object store supported by the Kubernetes cluster. For example, if the
 underlying object store is AWS S3, the developer will create an OBC, referencing
 a Storage Class which references the S3 store. The cluster has the S3 provisioner
 running which is watching for OBCs that it knows how to handle. Other OBCs are ignored
