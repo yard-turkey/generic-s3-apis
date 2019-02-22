@@ -38,7 +38,8 @@ OBCs that it knows how to provision and skips the rest. In this proposal, the bu
 provisioners will be simple-to-write operators because the bucket provisioning lib
 handles the bulk of the work. Each provisioner is only responsible for writing
 `Provision()` and `Delete()`functions (the _business logic_) and a short `main()`
-function.
+function. **Note:** even though the PV-PVC design supports static provisioning, only
+dynamic provisioning is supported by the bucket lib.
 
 The `Provision()` and `Delete()`functions are interfaces defined in the bucket library.
 All bucket provisioners are required to return an OB struct and the bucket
@@ -49,18 +50,6 @@ names, namespaces, and property keys. An app pod consuming a bucket need only be
 of the Secret name and keys, and the ConfigMap name and fields. The app pod will not
 run until the bucket has been provisioned and can be accessed. This is true even if
 the pod is created prior to the OBC.
-
-An OBC can be deleted but the underlying bucket is not removed, in this POC phase, due
-to concerns of deleting objects that cannot be easily recovered. However, OBC deletion
-triggers cleanup of Kubernetes resources created on behalf of the bucket, including
-the Secret and ConfigMap. Since the physical bucket is not deleted neither is the OB,
-which represents this bucket. The OB's status will indicate that the related OBC
-has been deleted so that an admin has better visibility into buckets that are missing
-their connection information.
-
-**Note:** it is an expected enhancement to support the Storage Class' _reclaimPolicy_,
-but for this POC phase, the safest approach is to ignore this policy and not delete
-the bucket.
 
 ### Binding
 
@@ -78,10 +67,46 @@ refected in the OB. Done by the bucket lib.
 `Bound` is one of the supported phases of an OB and OBC. `Bound` indicates that a
 bucket and all related artifacts have been created on behalf of the OBC.
 
-**Note:** the provisioner is the owner of the bucket, not the OBC. This is done to
-prevent an OBC author from using the generated access key to create buckets outside
-of Kubernetes. The OBC creator has object PUT, GET, and DELETE access to the bucket,
-but cannot create buckets with this access key.
+The credentials necessary to create a bucket need to be defined in an object
+store specific Secret, which must be the only secret in the object store's
+namespace. These credentials must grant CREATE access to the object store. The
+bucket lib will generate a user-based Secret which grants all access except the
+ability to CREATE buckets. The motivation here is to prevent an OBC author from
+using the generated access key to create buckets outside of Kubernetes. 
+
+### Bucket Deletion
+
+An OBC can be deleted but the underlying bucket is not removed, in this POC phase, due
+to concerns of deleting objects that cannot be easily recovered. However, OBC deletion
+triggers cleanup of Kubernetes resources created on behalf of the bucket, including
+the Secret and ConfigMap. Since the physical bucket is not deleted neither is the OB,
+which represents this bucket. The OB's status will indicate that the related OBC
+has been deleted so that an admin has better visibility into buckets that are missing
+their connection information.
+
+The generated OB's `ownerReference` is set to the object store, not to the OBC.
+This allows an OBC to be deleted while preserving the OB. When the object store
+service is deleted all OBs belonging to that object store will be automatically
+deleted by Kubernetes due to the `ownerReference` setting.
+
+**Note:** it is an expected enhancement to support a Storage Class' _reclaimPolicy_,
+but for this POC phase, the safest approach is to ignore this policy and not delete
+the bucket. Once _reclaimPolicy_ is supported an OB's `ownerReference` will need to
+be set to the OBC if the the policy is to delete the bucket.
+
+**Note:** the bucket library has no mechanism to prevent an OBC from being deleted when one or
+more pods indirectly reference the OBC via the Secret and ConfigMap. This concept came late
+for PVCs, see
+[merged pr](https://github.com/kubernetes/community/pull/1174/files), and may be even more
+difficult to implement for OBCs.
+
+### Bucket Sharing
+
+Env though there is a 1:1 mapping of an OBC and OB, a bucket can still be shared,
+at least within the same namespace. The reason for this is because the app pods never
+reference the OBC (or OB) directly, but instead consume a Secret and ConfigMap in
+order to access the bucket. Since more than one pod can ingest the same Secert and
+ConfigMap, a bucket can be shared. _TODO: verify._
 
 ### Quota
 
